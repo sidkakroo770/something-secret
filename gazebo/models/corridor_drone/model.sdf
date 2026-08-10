@@ -1,0 +1,183 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+
+  <model name="corridor_drone">
+
+    <static>false</static>
+
+    <link name="base_link">
+
+      <!-- Keep it floating for this sensor test -->
+      <gravity>false</gravity>
+
+      <inertial>
+        <mass>1.5</mass>
+        <inertia>
+          <ixx>0.03</ixx>
+          <iyy>0.03</iyy>
+          <izz>0.05</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+
+      <!-- Physical body -->
+      <collision name="body_collision">
+        <geometry>
+          <box>
+            <size>0.35 0.35 0.12</size>
+          </box>
+        </geometry>
+      </collision>
+
+      <visual name="body_visual">
+        <geometry>
+          <box>
+            <size>0.35 0.35 0.12</size>
+          </box>
+        </geometry>
+
+        <material>
+          <ambient>0.15 0.15 0.15 1</ambient>
+          <diffuse>0.15 0.15 0.15 1</diffuse>
+        </material>
+      </visual>
+
+
+      <!-- Forward arm: RED so you can see aircraft heading -->
+      <visual name="front_arm">
+        <pose>0.25 0 0 0 0 0</pose>
+
+        <geometry>
+          <box>
+            <size>0.5 0.04 0.04</size>
+          </box>
+        </geometry>
+
+        <material>
+          <ambient>0.8 0.1 0.1 1</ambient>
+          <diffuse>0.8 0.1 0.1 1</diffuse>
+        </material>
+      </visual>
+
+
+      <!-- Rear arm -->
+      <visual name="rear_arm">
+        <pose>-0.25 0 0 0 0 0</pose>
+
+        <geometry>
+          <box>
+            <size>0.5 0.04 0.04</size>
+          </box>
+        </geometry>
+      </visual>
+
+
+      <!-- Left/right arm -->
+      <visual name="side_arm">
+        <geometry>
+          <box>
+            <size>0.04 0.70 0.04</size>
+          </box>
+        </geometry>
+      </visual>
+
+
+      <!-- Four rotors -->
+
+      <visual name="rotor_front">
+        <pose>0.50 0 0.03 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.12</radius>
+            <length>0.015</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+      <visual name="rotor_back">
+        <pose>-0.50 0 0.03 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.12</radius>
+            <length>0.015</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+      <visual name="rotor_left">
+        <pose>0 0.35 0.03 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.12</radius>
+            <length>0.015</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+      <visual name="rotor_right">
+        <pose>0 -0.35 0.03 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.12</radius>
+            <length>0.015</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+
+      <!-- ======================================== -->
+      <!-- 360 DEGREE 2D LIDAR -->
+      <!-- ======================================== -->
+
+      <sensor name="lidar" type="ray">
+
+        <pose>0 0 0.12 0 0 0</pose>
+
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>10</update_rate>
+
+        <ray>
+
+          <scan>
+            <horizontal>
+              <samples>502</samples>
+              <resolution>1</resolution>
+
+              <min_angle>-3.14159265359</min_angle>
+              <max_angle>3.14159265359</max_angle>
+            </horizontal>
+          </scan>
+
+          <range>
+            <min>0.02</min>
+            <max>12.0</max>
+            <resolution>0.004</resolution>
+          </range>
+
+        </ray>
+
+        <plugin
+          name="gazebo_ros_ray_sensor"
+          filename="libgazebo_ros_ray_sensor.so">
+
+          <ros>
+            <namespace>/</namespace>
+            <remapping>~/out:=scan</remapping>
+          </ros>
+
+          <output_type>sensor_msgs/LaserScan</output_type>
+
+          <frame_name>base_laser</frame_name>
+
+        </plugin>
+
+      </sensor>
+
+    </link>
+
+  </model>
+
+</sdf>

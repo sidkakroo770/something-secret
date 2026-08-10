@@ -1,0 +1,261 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+
+  <world name="aerothon_corridor">
+
+    <!-- ===================== -->
+    <!-- PHYSICS -->
+    <!-- ===================== -->
+
+    <physics type="ode" name="default_physics">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+
+    <!-- ===================== -->
+    <!-- SUN -->
+    <!-- ===================== -->
+
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+
+    <!-- ===================== -->
+    <!-- GROUND -->
+    <!-- ===================== -->
+
+    <model name="ground">
+      <static>true</static>
+
+      <pose>5 0 -0.05 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>30 20 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>30 20 0.1</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.45 0.45 0.45 1</ambient>
+            <diffuse>0.55 0.55 0.55 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+
+
+    <!-- =================================================== -->
+    <!-- ENTRANCE FRAME -->
+    <!-- Clear width  = 3.500 m -->
+    <!-- Clear height = 3.048 m = 10 ft -->
+    <!-- Frame thickness = 0.150 m -->
+    <!-- =================================================== -->
+
+
+    <!-- LEFT POST -->
+
+    <model name="entrance_left_post">
+      <static>true</static>
+
+      <pose>0 1.825 1.524 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.15 0.15 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.15 0.15 3.048</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+
+
+    <!-- RIGHT POST -->
+
+    <model name="entrance_right_post">
+      <static>true</static>
+
+      <pose>0 -1.825 1.524 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.15 0.15 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.15 0.15 3.048</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+
+
+    <!-- TOP CROSSBAR -->
+
+    <model name="entrance_top_bar">
+      <static>true</static>
+
+      <!-- Bottom of bar = 3.048 m -->
+      <pose>0 0 3.123 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.15 3.80 0.15</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.15 3.80 0.15</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+
+
+    <!-- =================================================== -->
+    <!-- CORRIDOR -->
+    <!-- Length = 10 m -->
+    <!-- Internal width = 3.5 m -->
+    <!-- Height = 3.048 m -->
+    <!-- =================================================== -->
+
+
+    <!-- LEFT WALL -->
+
+    <model name="left_corridor_wall">
+      <static>true</static>
+
+      <pose>5 1.825 1.524 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>10 0.15 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>10 0.15 3.048</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.7 0.7 0.7 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+
+
+    <!-- RIGHT WALL -->
+
+    <model name="right_corridor_wall">
+      <static>true</static>
+
+      <pose>5 -1.825 1.524 0 0 0</pose>
+
+      <link name="link">
+
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>10 0.15 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>10 0.15 3.048</size>
+            </box>
+          </geometry>
+
+          <material>
+            <ambient>0.7 0.7 0.7 1</ambient>
+            <diffuse>0.7 0.7 0.7 1</diffuse>
+          </material>
+        </visual>
+
+      </link>
+    </model>
+    <plugin name="gazebo_ros_state"
+        filename="libgazebo_ros_state.so">
+
+    <ros>
+      <namespace>/gazebo</namespace>
+    </ros>
+
+    <update_rate>50.0</update_rate>
+
+  </plugin>
+
+
+  </world>
+
+</sdf>

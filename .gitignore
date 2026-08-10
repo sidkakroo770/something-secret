@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.vscode/
+.idea/
+.DS_Store
+
+# Backups / temporary versions
+*_BEFORE_*.py
+*~
