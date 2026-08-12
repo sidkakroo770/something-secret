@@ -1,11 +1,23 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
-*.log
+
+# ROS 2 / colcon
+build/
+install/
+log/
+
+# IDE / editor
 .vscode/
 .idea/
-.DS_Store
-
-# Backups / temporary versions
-*_BEFORE_*.py
+*.swp
 *~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Gazebo / logs
+.gazebo/
+*.log

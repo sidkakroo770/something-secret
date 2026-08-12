@@ -1,0 +1,259 @@
+<?xml version="1.0" ?>
+<sdf version="1.6">
+
+  <!--
+    Gazebo Classic corridor world for the four-state LiDAR FSM test:
+
+      PRE_ENTRY_GEOMETRY_LOCK
+          -> CORRIDOR_CRUISE
+          -> OBSTACLE_DECISION / AVOID_RIGHT   (left-wall obstacle)
+          -> CORRIDOR_CRUISE
+          -> OBSTACLE_DECISION / AVOID_LEFT    (right-wall obstacle)
+          -> CORRIDOR_CRUISE
+          -> EXIT_DETECTION
+
+    Geometry:
+      corridor internal width : 3.50 m
+      corridor length         : 28.00 m
+      corridor height         : 3.048 m (10 ft)
+
+      left obstacle centre    : x = 8.0 m
+      right obstacle centre   : x = 18.0 m
+      obstacle intrusion      : 2.00 m into corridor
+      obstacle thickness      : 0.20 m along flight direction
+      free gap at obstacle    : 1.50 m
+
+    Coordinate convention:
+      +x = forward through corridor
+      +y = left
+      -y = right
+  -->
+
+  <world name="aerothon_corridor_obstacle_fsm_test">
+
+    <!-- ===================== -->
+    <!-- PHYSICS               -->
+    <!-- ===================== -->
+    <physics type="ode" name="default_physics">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+
+    <!-- ===================== -->
+    <!-- SUN                   -->
+    <!-- ===================== -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- ===================== -->
+    <!-- GROUND                -->
+    <!-- ===================== -->
+    <model name="ground">
+      <static>true</static>
+      <!-- Covers the entrance, whole corridor, and several metres after exit. -->
+      <pose>14 0 -0.05 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>40 20 0.1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>40 20 0.1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.45 0.45 0.45 1</ambient>
+            <diffuse>0.55 0.55 0.55 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- =================================================== -->
+    <!-- ENTRANCE FRAME                                      -->
+    <!-- Clear width  = 3.500 m                              -->
+    <!-- Clear height = 3.048 m = 10 ft                     -->
+    <!-- Frame thickness = 0.150 m                           -->
+    <!-- =================================================== -->
+
+    <model name="entrance_left_post">
+      <static>true</static>
+      <pose>0 1.825 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 0.15 3.048</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 0.15 3.048</size></box></geometry>
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="entrance_right_post">
+      <static>true</static>
+      <pose>0 -1.825 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 0.15 3.048</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 0.15 3.048</size></box></geometry>
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="entrance_top_bar">
+      <static>true</static>
+      <!-- Bottom of bar = 3.048 m -->
+      <pose>0 0 3.123 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>0.15 3.80 0.15</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.15 3.80 0.15</size></box></geometry>
+          <material>
+            <ambient>0.1 0.8 0.1 1</ambient>
+            <diffuse>0.1 0.8 0.1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- =================================================== -->
+    <!-- MAIN CORRIDOR                                       -->
+    <!-- Length = 28 m; inside faces at y = +/-1.75 m       -->
+    <!-- =================================================== -->
+
+    <model name="left_corridor_wall">
+      <static>true</static>
+      <pose>14 1.825 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>28 0.15 3.048</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>28 0.15 3.048</size></box></geometry>
+          <material>
+            <ambient>0.72 0.72 0.72 1</ambient>
+            <diffuse>0.72 0.72 0.72 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="right_corridor_wall">
+      <static>true</static>
+      <pose>14 -1.825 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>28 0.15 3.048</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>28 0.15 3.048</size></box></geometry>
+          <material>
+            <ambient>0.72 0.72 0.72 1</ambient>
+            <diffuse>0.72 0.72 0.72 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- =================================================== -->
+    <!-- OBSTACLE 1: EMERGES FROM LEFT WALL                  -->
+    <!--                                                     -->
+    <!-- x = 8.0 m                                           -->
+    <!-- y spans -0.25 ... +1.75 m                          -->
+    <!-- 2.0 m intrusion; 1.5 m free gap on RIGHT          -->
+    <!-- Expected FSM decision: AVOID_RIGHT                  -->
+    <!-- =================================================== -->
+    <model name="left_wall_obstacle_2m">
+      <static>true</static>
+      <pose>8.0 0.75 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <!-- 0.20 m thick in x, 2.00 m across corridor -->
+              <size>0.20 2.00 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.20 2.00 3.048</size></box>
+          </geometry>
+          <!-- Orange/red = obstacle from left -->
+          <material>
+            <ambient>0.90 0.28 0.05 1</ambient>
+            <diffuse>0.90 0.28 0.05 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- =================================================== -->
+    <!-- OBSTACLE 2: EMERGES FROM RIGHT WALL                 -->
+    <!--                                                     -->
+    <!-- x = 18.0 m                                          -->
+    <!-- y spans -1.75 ... +0.25 m                          -->
+    <!-- 2.0 m intrusion; 1.5 m free gap on LEFT           -->
+    <!-- Expected FSM decision: AVOID_LEFT                   -->
+    <!-- =================================================== -->
+    <model name="right_wall_obstacle_2m">
+      <static>true</static>
+      <pose>18.0 -0.75 1.524 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.20 2.00 3.048</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>0.20 2.00 3.048</size></box>
+          </geometry>
+          <!-- Blue = obstacle from right -->
+          <material>
+            <ambient>0.08 0.30 0.90 1</ambient>
+            <diffuse>0.08 0.30 0.90 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- =================================================== -->
+    <!-- EXIT                                                 -->
+    <!--                                                     -->
+    <!-- No end wall and no exit frame on purpose.           -->
+    <!-- Both corridor side walls terminate abruptly at      -->
+    <!-- x = 28.0 m so EXIT_DETECTION sees a real opening.   -->
+    <!-- =================================================== -->
+
+    <!-- Gazebo ROS state services used by the current mission bridge. -->
+    <plugin name="gazebo_ros_state" filename="libgazebo_ros_state.so">
+      <ros>
+        <namespace>/gazebo</namespace>
+      </ros>
+      <update_rate>50.0</update_rate>
+    </plugin>
+
+  </world>
+</sdf>

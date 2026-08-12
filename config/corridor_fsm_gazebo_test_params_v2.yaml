@@ -1,0 +1,18 @@
+corridor_cruise_v2:
+  ros__parameters:
+    # Wider front cone for the 2 m side-obstacle Gazebo test.
+    front_cone_deg: 35.0
+
+    # After bypassing a 2 m intrusion in a 3.5 m corridor, the vehicle is
+    # intentionally about 1.0 m off the original corridor centreline.
+    # Default 0.70 m falsely treats that valid post-bypass offset as an
+    # extreme recenter failure. 1.10 m lets CORRIDOR_CRUISE recenter it.
+    correction_extreme_lateral_m: 1.10
+
+obstacle_avoidance_v1:
+  ros__parameters:
+    # The 2 m obstacle requires about 5 s of lateral SHIFT plus roughly
+    # 9-10 s of PASS at the current speeds, so the old 12 s total timeout
+    # is too short.
+    avoid_timeout_s: 28.0
+    shift_timeout_s: 8.0
