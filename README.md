@@ -1,6 +1,6 @@
-# SAE Drone Corridor FSM
+# Drone Corridor FSM
 
-ROS 2 / Gazebo Classic autonomous corridor-navigation finite-state machine developed for the SAEINDIA AeroTHON rotorcraft autonomous mission.
+ROS 2 / Gazebo Classic autonomous corridor-navigation finite-state machine developed for the [redacted] rotorcraft autonomous mission.
 
 The corridor stack uses a 2-D LiDAR for corridor alignment, centering, obstacle detection / bypass, recovery, and exit handling.
 
