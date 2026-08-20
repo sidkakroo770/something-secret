@@ -27,6 +27,9 @@ from native.controllers.exit_detection import ExitDetectionController
 from native.controllers.hover_and_reassess import (
     HoverAndReassessController,
 )
+from native.controllers.abort_corridor import (
+    AbortCorridorController,
+)
 
 from native.hardware.d500_driver import D500Driver
 
@@ -119,6 +122,7 @@ class NativeMissionRunner:
         self.obstacle = ObstacleAvoidanceController()
         self.exit = ExitDetectionController()
         self.reassess = HoverAndReassessController()
+        self.abort_controller = AbortCorridorController()
 
         # ----------------------------------------------------
         # Mission state
@@ -467,6 +471,10 @@ class NativeMissionRunner:
         )
 
         self.terminal_reason = reason
+
+        self.abort_controller.enter(
+            reason
+        )
 
         print(
             f"[MISSION] "
@@ -900,10 +908,13 @@ class NativeMissionRunner:
         pose: Optional[VehiclePose] = None,
     ) -> ControllerOutput:
 
-        # Terminal states.
-        if self.state in (
-            MissionState.ABORT_CORRIDOR,
-            MissionState.CORRIDOR_EXITED,
+        # ----------------------------------------------------
+        # Terminal success
+        # ----------------------------------------------------
+
+        if (
+            self.state
+            == MissionState.CORRIDOR_EXITED
         ):
 
             self.latest_command = (
@@ -914,6 +925,37 @@ class NativeMissionRunner:
                 command=self.latest_command,
                 status=self.state.value,
                 reason=self.terminal_reason,
+            )
+
+        # ----------------------------------------------------
+        # Terminal abort
+        #
+        # Navigation is permanently over. The only remaining
+        # semantic request is LAND.
+        #
+        # Nothing here transmits anything to the Pixhawk.
+        # ----------------------------------------------------
+
+        if (
+            self.state
+            == MissionState.ABORT_CORRIDOR
+        ):
+
+            abort_output = (
+                self.abort_controller.step(
+                    landed=False
+                )
+            )
+
+            self.latest_command = (
+                BodyVelocity.stop()
+            )
+
+            return ControllerOutput(
+                command=self.latest_command,
+                status=MissionState.ABORT_CORRIDOR.value,
+                reason=self.terminal_reason,
+                action=abort_output.action,
             )
 
         self.maybe_reset_recovery_chain()
@@ -1063,7 +1105,10 @@ class NativeMissionRunner:
             == MissionState.EXIT_DETECTION
         ):
 
-            output = self.exit.step(scan)
+            output = self.exit.step(
+                scan=scan,
+                pose=pose,
+            )
 
         # ----------------------------------------------------
         # REASSESS
@@ -1098,6 +1143,33 @@ class NativeMissionRunner:
             output
         )
 
+        # A controller may have transitioned us into ABORT during
+        # this exact update. Expose LAND immediately so callers
+        # never miss the terminal action.
+        if (
+            self.state
+            == MissionState.ABORT_CORRIDOR
+        ):
+
+            abort_output = (
+                self.abort_controller.step(
+                    landed=False
+                )
+            )
+
+            self.latest_command = (
+                BodyVelocity.stop()
+            )
+
+            return ControllerOutput(
+                command=self.latest_command,
+                next_state=None,
+                status=MissionState.ABORT_CORRIDOR.value,
+                reason=self.terminal_reason,
+                confidence=None,
+                action=abort_output.action,
+            )
+
         # If transition occurred, do NOT leak the old
         # controller's command across the handoff.
         if self.state != self.public_state():
@@ -1114,6 +1186,7 @@ class NativeMissionRunner:
             status=self.public_state().value,
             reason=output.reason,
             confidence=output.confidence,
+            action=output.action,
         )
 
     # ========================================================

@@ -6,7 +6,7 @@ import math
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional
+from typing import Optional, Protocol
 
 import numpy as np
 
@@ -18,21 +18,43 @@ from native.common.types import (
 )
 
 
+# ============================================================
+# Minimal pose interface
+#
+# mission_runner.VehiclePose already satisfies this.
+# Using a Protocol avoids circular imports.
+# ============================================================
+
+class PoseLike(Protocol):
+    x_m: float
+    y_m: float
+    yaw_rad: float
+    timestamp: float
+
+
 @dataclass
 class ExitConfig:
 
-    # Commit behaviour
+    # Forward commit
     exit_forward_speed_m_s: float = 0.15
     exit_commit_distance_m: float = 1.20
 
+    # Real position supervision
+    pose_fresh_s: float = 0.50
+    pose_loss_timeout_s: float = 1.00
+
+    # If the aircraft cannot actually make the requested progress,
+    # never drive forward forever.
+    exit_hard_timeout_s: float = 15.0
+
     # Emergency front safety
     use_front_safety: bool = True
-
     front_cone_deg: float = 18.0
     front_stop_m: float = 0.60
     front_stop_confirm_scans: int = 2
 
-    # Missing/stale LiDAR does NOT stop the committed exit.
+    # Missing LiDAR alone does not invalidate the exit commit.
+    # Position feedback IS required.
     scan_fresh_for_safety_s: float = 0.50
 
 
@@ -58,29 +80,25 @@ class ExitDetectionController:
 
         self.state = ExitState.IDLE
 
-        self.commit_start_monotonic: Optional[
-            float
-        ] = None
+        self.commit_start_monotonic: Optional[float] = None
 
-        self.transition_target: Optional[
-            MissionState
-        ] = None
+        # Pose latched when real exit movement begins.
+        self.start_x_m: Optional[float] = None
+        self.start_y_m: Optional[float] = None
+        self.start_yaw_rad: Optional[float] = None
 
+        self.measured_travel_m: Optional[float] = None
+
+        self.pose_missing_since: Optional[float] = None
+
+        self.transition_target: Optional[MissionState] = None
         self.transition_reason = ""
 
-        self.front_clearance_m: Optional[
-            float
-        ] = None
-
-        self.last_scan_monotonic: Optional[
-            float
-        ] = None
-
+        self.front_clearance_m: Optional[float] = None
+        self.last_scan_monotonic: Optional[float] = None
         self.front_stop_streak = 0
 
-        self.latest_command = (
-            BodyVelocity.stop()
-        )
+        self.latest_command = BodyVelocity.stop()
 
     # ========================================================
     # Lifecycle
@@ -90,9 +108,14 @@ class ExitDetectionController:
 
         self.state = ExitState.COMMIT_FORWARD
 
-        self.commit_start_monotonic = (
-            time.monotonic()
-        )
+        self.commit_start_monotonic = time.monotonic()
+
+        self.start_x_m = None
+        self.start_y_m = None
+        self.start_yaw_rad = None
+
+        self.measured_travel_m = None
+        self.pose_missing_since = None
 
         self.transition_target = None
         self.transition_reason = ""
@@ -101,16 +124,12 @@ class ExitDetectionController:
         self.front_clearance_m = None
         self.last_scan_monotonic = None
 
-        self.latest_command = (
-            BodyVelocity.stop()
-        )
+        self.latest_command = BodyVelocity.stop()
 
         print(
             "[EXIT] entered COMMIT_FORWARD: "
             f"vx={self.forward_speed():.2f} m/s, "
-            f"distance={self.commit_distance():.2f} m, "
-            f"nominal time="
-            f"{self.nominal_duration():.2f} s"
+            f"measured target={self.commit_distance():.2f} m"
         )
 
     def reset(self) -> None:
@@ -119,43 +138,36 @@ class ExitDetectionController:
 
         self.commit_start_monotonic = None
 
+        self.start_x_m = None
+        self.start_y_m = None
+        self.start_yaw_rad = None
+
+        self.measured_travel_m = None
+        self.pose_missing_since = None
+
         self.transition_target = None
         self.transition_reason = ""
 
         self.front_clearance_m = None
         self.last_scan_monotonic = None
-
         self.front_stop_streak = 0
 
-        self.latest_command = (
-            BodyVelocity.stop()
-        )
+        self.latest_command = BodyVelocity.stop()
 
     # ========================================================
-    # Basic timing
+    # Timing
     # ========================================================
 
     def forward_speed(self) -> float:
-
-        # Prevent accidental zero/negative speed from
-        # creating an infinite state.
         return max(
             0.05,
             self.config.exit_forward_speed_m_s,
         )
 
     def commit_distance(self) -> float:
-
         return max(
             0.20,
             self.config.exit_commit_distance_m,
-        )
-
-    def nominal_duration(self) -> float:
-
-        return (
-            self.commit_distance()
-            / self.forward_speed()
         )
 
     def elapsed_s(self) -> float:
@@ -169,15 +181,94 @@ class ExitDetectionController:
             - self.commit_start_monotonic,
         )
 
-    def estimated_travel_m(self) -> float:
+    # ========================================================
+    # Pose / real displacement
+    # ========================================================
+
+    @staticmethod
+    def pose_age_s(
+        pose: PoseLike,
+    ) -> float:
+
+        return max(
+            0.0,
+            time.monotonic()
+            - float(pose.timestamp),
+        )
+
+    def pose_is_fresh(
+        self,
+        pose: Optional[PoseLike],
+    ) -> bool:
+
+        if pose is None:
+            return False
 
         return (
-            self.forward_speed()
-            * self.elapsed_s()
+            self.pose_age_s(pose)
+            <= self.config.pose_fresh_s
+        )
+
+    def latch_start_pose(
+        self,
+        pose: PoseLike,
+    ) -> None:
+
+        self.start_x_m = float(pose.x_m)
+        self.start_y_m = float(pose.y_m)
+        self.start_yaw_rad = float(
+            pose.yaw_rad
+        )
+
+        self.measured_travel_m = 0.0
+
+        print(
+            "[EXIT] local start pose latched: "
+            f"x={self.start_x_m:.2f}, "
+            f"y={self.start_y_m:.2f}, "
+            f"yaw="
+            f"{math.degrees(self.start_yaw_rad):.1f}°"
+        )
+
+    def projected_travel(
+        self,
+        pose: PoseLike,
+    ) -> float:
+
+        if (
+            self.start_x_m is None
+            or self.start_y_m is None
+            or self.start_yaw_rad is None
+        ):
+            return 0.0
+
+        dx = (
+            float(pose.x_m)
+            - self.start_x_m
+        )
+
+        dy = (
+            float(pose.y_m)
+            - self.start_y_m
+        )
+
+        # LOCAL_POSITION_NED:
+        #
+        # x = North
+        # y = East
+        #
+        # yaw=0 points North,
+        # positive yaw rotates toward East.
+        #
+        # Project actual horizontal displacement onto the heading
+        # present when EXIT_DETECTION started moving.
+        return (
+            math.cos(self.start_yaw_rad) * dx
+            + math.sin(self.start_yaw_rad) * dy
         )
 
     # ========================================================
-    # LiDAR emergency safety
+    # LiDAR front safety
     # ========================================================
 
     def extract_front_clearance(
@@ -198,9 +289,9 @@ class ExitDetectionController:
         if ranges.size == 0:
             return None
 
-        # No-return / +inf means clear up to sensor max range.
         safe = ranges.copy()
 
+        # No return means clear up to LiDAR maximum range.
         safe[np.isposinf(safe)] = (
             scan.range_max_m
         )
@@ -212,7 +303,9 @@ class ExitDetectionController:
             0.05,
         )
 
-        valid &= safe <= scan.range_max_m
+        valid &= (
+            safe <= scan.range_max_m
+        )
 
         half = math.radians(
             self.config.front_cone_deg
@@ -299,6 +392,7 @@ class ExitDetectionController:
     def step(
         self,
         scan: Optional[NativeScan] = None,
+        pose: Optional[PoseLike] = None,
     ) -> ControllerOutput:
 
         if self.state == ExitState.IDLE:
@@ -317,9 +411,9 @@ class ExitDetectionController:
 
             return self.output()
 
+        # Emergency LiDAR check remains active.
         self.process_scan(scan)
 
-        # process_scan may have triggered emergency transition.
         if self.transition_target is not None:
 
             self.latest_command = (
@@ -328,42 +422,123 @@ class ExitDetectionController:
 
             return self.output()
 
-        if self.state == ExitState.COMMIT_FORWARD:
+        if (
+            self.state
+            != ExitState.COMMIT_FORWARD
+        ):
 
-            # CRITICAL:
-            # no wall-confidence or side-wall requirement here.
-            #
-            # Walls disappearing is EXPECTED during corridor exit.
-            self.latest_command = BodyVelocity(
+            return self.output()
+
+        # ----------------------------------------------------
+        # Hard runtime guard.
+        # ----------------------------------------------------
+
+        if (
+            self.elapsed_s()
+            >= self.config.exit_hard_timeout_s
+        ):
+
+            self.request_transition(
+                MissionState.HOVER_AND_REASSESS,
+                (
+                    "EXIT_DETECTION progress timeout "
+                    f"after {self.elapsed_s():.1f} s"
+                ),
+            )
+
+            return self.output()
+
+        # ----------------------------------------------------
+        # Position is mandatory for real exit completion.
+        # ----------------------------------------------------
+
+        if not self.pose_is_fresh(pose):
+
+            self.latest_command = (
+                BodyVelocity.stop()
+            )
+
+            now = time.monotonic()
+
+            if self.pose_missing_since is None:
+                self.pose_missing_since = now
+
+            missing_age = (
+                now
+                - self.pose_missing_since
+            )
+
+            if (
+                missing_age
+                >= self.config.pose_loss_timeout_s
+            ):
+
+                self.request_transition(
+                    MissionState.HOVER_AND_REASSESS,
+                    (
+                        "EXIT_DETECTION has no fresh "
+                        "local-position feedback for "
+                        f"{missing_age:.1f} s"
+                    ),
+                )
+
+            return self.output()
+
+        # Fresh position recovered.
+        self.pose_missing_since = None
+
+        assert pose is not None
+
+        # First valid pose becomes the reference position.
+        if self.start_x_m is None:
+
+            self.latch_start_pose(pose)
+
+        travelled = self.projected_travel(
+            pose
+        )
+
+        self.measured_travel_m = (
+            travelled
+        )
+
+        # ----------------------------------------------------
+        # Actual displacement decides completion.
+        # ----------------------------------------------------
+
+        if (
+            travelled
+            >= self.commit_distance()
+        ):
+
+            self.request_transition(
+                MissionState.CORRIDOR_EXITED,
+                (
+                    "measured forward displacement "
+                    f"{travelled:.2f} m "
+                    f"(target "
+                    f"{self.commit_distance():.2f} m)"
+                ),
+            )
+
+            self.latest_command = (
+                BodyVelocity.stop()
+            )
+
+            return self.output()
+
+        # ----------------------------------------------------
+        # Continue the committed real movement.
+        # ----------------------------------------------------
+
+        self.latest_command = (
+            BodyVelocity(
                 vx_m_s=self.forward_speed(),
                 vy_m_s=0.0,
                 vz_m_s=0.0,
                 yaw_rate_rad_s=0.0,
             )
-
-            if (
-                self.estimated_travel_m()
-                >= self.commit_distance()
-            ):
-
-                travelled = (
-                    self.estimated_travel_m()
-                )
-
-                self.request_transition(
-                    MissionState.CORRIDOR_EXITED,
-                    (
-                        f"committed forward "
-                        f"{travelled:.2f} m "
-                        f"(target "
-                        f"{self.commit_distance():.2f} m)"
-                    ),
-                )
-
-                # Stop immediately on completion.
-                self.latest_command = (
-                    BodyVelocity.stop()
-                )
+        )
 
         return self.output()
 
@@ -387,7 +562,10 @@ class ExitDetectionController:
             BodyVelocity.stop()
         )
 
-        if target == MissionState.CORRIDOR_EXITED:
+        if (
+            target
+            == MissionState.CORRIDOR_EXITED
+        ):
 
             self.state = ExitState.COMPLETE
 
@@ -404,7 +582,9 @@ class ExitDetectionController:
     # Diagnostics
     # ========================================================
 
-    def scan_age_s(self) -> Optional[float]:
+    def scan_age_s(
+        self,
+    ) -> Optional[float]:
 
         if self.last_scan_monotonic is None:
             return None
@@ -463,10 +643,21 @@ class ExitDetectionController:
                     3,
                 ),
 
-            "estimated_commanded_travel_m":
-                round(
-                    self.estimated_travel_m(),
-                    3,
+            "measured_travel_m":
+                (
+                    round(
+                        self.measured_travel_m,
+                        3,
+                    )
+                    if self.measured_travel_m
+                    is not None
+                    else None
+                ),
+
+            "start_pose_latched":
+                (
+                    self.start_x_m
+                    is not None
                 ),
 
             "front_clearance_m":
@@ -479,9 +670,6 @@ class ExitDetectionController:
                     is not None
                     else None
                 ),
-
-            "front_safety_scan_fresh":
-                self.fresh_front_safety_available(),
 
             "front_stop_streak":
                 self.front_stop_streak,
